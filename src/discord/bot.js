@@ -88,8 +88,8 @@ client.on('messageReactionAdd', async (reaction, user) => {
   }
   if (user.bot) return; // ボットのリアクションは無視
 
-  // リアクションが 'remind' の場合、リマインダーを設定
-  if (reaction.emoji.name === 'remind') {
+  // リアクションが 'alarm_clock'⏰ の場合、リマインダーを設定
+  if (reaction.emoji.name === 'alarm_clock') {
     try {
       await handleSetReminder(user, reaction.message.content);
     } catch (error) {
@@ -109,7 +109,8 @@ client.on('interactionCreate', async (interaction) => {
 
   try {
     if (commandName === 'live') {
-      const liveVideos = await getLiveData();
+      const channelName = interaction.options.getInteger('channelName') || "";
+      const liveVideos = await getLiveData(channelName);
       if (liveVideos.length === 0) {
         await interaction.reply({ content: "現在ライブ配信はありません。", ephemeral: true });
       } else {
@@ -122,7 +123,8 @@ client.on('interactionCreate', async (interaction) => {
       }
     } else if (commandName === 'upcoming') {
       const minutes = interaction.options.getInteger('minutes') || 15;
-      const upcomingVideos = await getUpcomingData(minutes);
+      const channelName = interaction.options.getInteger('channelName') || "";
+      const upcomingVideos = await getUpcomingData(minutes, channelName);
       if (upcomingVideos.length === 0) {
         await interaction.reply({ content: `${minutes}分以内に始まる配信はありません。`, ephemeral: true });
       } else {

@@ -17,6 +17,9 @@ import { searchAndScheduleReminders } from "./src/tasks/reminderScheduler.js";
 import { cleanUpVideoData } from "./src/tasks/cleanUpVideoData.js";
 import schedule from "node-schedule";
 
+//channelsデータベースからデータを取得する
+import { getChannelsData } from "../database/getChannelsData.js";
+
 // スケジュール間隔の定数
 const ONE_MINUTE_SCHEDULE = "0 * * * * *"; // 1分ごと
 const FIVE_MINUTE_SCHEDULE = "0 */5 * * * *"; // 5分ごと
@@ -26,10 +29,12 @@ const TEN_MINUTE_SCHEDULE = "0 */10 * * * *"; // 10分ごと
 schedule.scheduleJob(ONE_MINUTE_SCHEDULE, function () {
   console.log(`-`.repeat(50));
   try {
-    startYoutubeFeed(
-      process.env.DISCORD_LIVE_CHANNEL_NAME,
-      process.env.DISCORD_LIVE_WEBHOOK_URL
-    );
+    const channels = getChannelsData();
+    for (let { channel_id, channel_name, channel_icon_url, discord_channel_name, discord_webhook_url, fetch_time } of channels) {
+      if (fetch_time = 1){
+        startYoutubeFeed(discord_channel_name, discord_webhook_url);
+      }
+    }
     searchAndScheduleReminders();
   } catch (error) {
     console.error(`⛔️ Error during task execution: ${error.message}`);
@@ -48,10 +53,12 @@ schedule.scheduleJob(FIVE_MINUTE_SCHEDULE, function () {
 // 10分ごとに実行するスケジュール
 schedule.scheduleJob(TEN_MINUTE_SCHEDULE, function () {
   try {
-    startYoutubeFeed(
-      process.env.DISCORD_VIDEO_CHANNEL_NAME,
-      process.env.DISCORD_VIDEO_WEBHOOK_URL
-    );
+    const channels = getChannelsData();
+    for (let { channel_id, channel_name, channel_icon_url, discord_channel_name, discord_webhook_url, fetch_time } of channels) {
+      if (fetch_time = 10){
+        startYoutubeFeed(discord_channel_name, discord_webhook_url);
+      }
+    }
   } catch (error) {
     console.error(`⛔️ Error during task execution: ${error.message}`);
   }

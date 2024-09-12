@@ -147,10 +147,17 @@ export async function updateVideoUpdatedTime(video_id, updated) {
 
 /**
  * 現在配信中のビデオデータを取得します。
+ * @param {string} channelName - チャンネル名を指定してデータ抽出する。前後あいまい一致する。
  * @returns {Promise<Array>} - 配信中のビデオデータを含む配列を返します。
  */
-export async function getLiveData() {
-    const query = "SELECT title, video_id FROM video_data WHERE status = 'live' ORDER BY actual_start_time ASC";
+export async function getLiveData(channelName) {
+    const query = `
+      SELECT title, video_id 
+      FROM video_data 
+      WHERE status = 'upcoming' 
+      AND channel LIKE '%'${channelName}'%' 
+      ORDER BY actual_start_time ASC
+      `;
     const { rows } = await pool.query(query);
     return rows;
 }
@@ -158,15 +165,17 @@ export async function getLiveData() {
 /**
  * 近くに配信予定のビデオデータを取得します。
  * @param {number} minutes - 現在時刻から検索する分数。
+ * @param {string} channelName - チャンネル名を指定してデータ抽出する。前後あいまい一致する。
  * @returns {Promise<Array>} - 配信予定のビデオデータを含む配列を返します。
  */
-export async function getUpcomingData(minutes = 15) {
+export async function getUpcomingData(minutes = 15, channelName) {
     const query = `
         SELECT title, video_id, scheduled_start_time 
         FROM video_data 
         WHERE status = 'upcoming' 
         AND scheduled_start_time > NOW() 
         AND scheduled_start_time <= NOW() + INTERVAL '${minutes} minutes' 
+        AND channel LIKE '%'${channelName}'%'  
         ORDER BY scheduled_start_time ASC
     `;
     const { rows } = await pool.query(query);
