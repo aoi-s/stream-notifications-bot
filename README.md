@@ -1,6 +1,10 @@
 # Stream Notifications Bot
 
-[English Version](#english-version)
+## フォーク元(https://github.com/tatsumin39/stream-notifications-bot) からの変更点
+- 同一箱のチャンネルをすべて登録するなど、多チャンネル運用を前提にした構造に変更しています。
+- DiscordチャンネルのWebhook URLとデータ取得間隔を.envでの指定からDBに格納するように変更しています。
+  - YouTubeチャンネルごとに通知先を変えることで、多チャンネル運用をした場合でも見やすくなります。
+- live/upcomingスラッシュコマンドで、特定チャンネルの情報を取得することを可能にしました。
 
 ## 目次
 
@@ -110,10 +114,6 @@
 | DISCORD_BOT_TOKEN          | Discord Bot のトークン                                  |
 | CLIENT_ID                  | Discord クライアント ID                                 |
 | GUILD_ID                   | Discord ギルド(サーバー)ID                              |
-| DISCORD_LIVE_CHANNEL_NAME  | 通知先 Discord チャンネル名（ライブ配信用）             |
-| DISCORD_LIVE_WEBHOOK_URL   | 通知先 Discord チャンネルの Webhook URL（ライブ配信用） |
-| DISCORD_VIDEO_CHANNEL_NAME | 通知先 Discord チャンネル名（動画配信用）               |
-| DISCORD_VIDEO_WEBHOOK_URL  | 通知先 Discord チャンネルの Webhook URL（動画配信用）   |
 | ADMIN_USER_ID              | 管理者の Discord ユーザー ID                            |
 | DB_HOST                    | データベースのホスト名                                  |
 | DB_NAME                    | データベース名                                          |
@@ -222,6 +222,8 @@ GRANT ALL PRIVILEGES ON DATABASE your_database_name TO your_database_user;
 | channel_name         | VARCHAR(255) | YouTube チャンネル名        |
 | channel_icon_url     | VARCHAR(255) | チャンネルのアイコンの URL  |
 | discord_channel_name | VARCHAR(255) | 通知先 Discord チャンネル名 |
+| discord_webhook_url | VARCHAR(255) | 通知先 Discord WebhookURL |
+| date_fetch_interval | INTERGER     | データ取得間隔(分) |
 
 #### 2. `video_data` テーブル
 
@@ -263,7 +265,9 @@ CREATE TABLE channels (
     channel_id VARCHAR(255) PRIMARY KEY,
     channel_name VARCHAR(255) NOT NULL,
     channel_icon_url VARCHAR(255),
-    discord_channel_name VARCHAR(255) NOT NULL
+    discord_channel_name VARCHAR(255) NOT NULL,
+    discord_webhook_url VARCHAR(255) NOT NULL,
+    data_fetch_interval INTEGER NOT NULL
 );
 
 CREATE TABLE video_data (
@@ -296,8 +300,8 @@ CREATE TABLE reminder (
 1. `channels` テーブルにデータを登録します。以下は、例として登録する SQL 文です。
 
 ```sql
-INSERT INTO channels (channel_id, channel_name, discord_channel_name)
-VALUES ('UC_x5XG1OV2P6uZZ5FSM9Ttw', 'Google Developers', '配信者更新通知');
+INSERT INTO channels (channel_id, channel_name, discord_channel_name, discord_webhook_url, data_fetch_interval)
+VALUES ('UCJFZiqLMntJufDCHc6bQixg', 'hololive ホロライブ - VTuber Group', 'hololive_公式', 'https://discord.com/api/webhooks/, '10');
 ```
 
 必要に応じて、channel_id, channel_name, discord_channel_name を適切な値に置き換えてください。
@@ -307,7 +311,7 @@ VALUES ('UC_x5XG1OV2P6uZZ5FSM9Ttw', 'Google Developers', '配信者更新通知'
 リポジトリをクローンします。
 
 ```bash
-git clone https://github.com/tatsumin39/stream-notifications-bot.git
+git clone https://github.com/aoi-s/stream-notifications-bot.git
 cd stream-notifications-bot
 ```
 
@@ -364,20 +368,21 @@ node src/slashCommand/delete.js <commandId>
 
 #### リマインダーの登録
 
-1. リマインダー用の絵文字 :remind: を事前に登録します。
-2. ライブ配信予定の投稿に対して絵文字 :remind: でリアクションを実施します。
-3. ライブ配信予定の 5 分前に Discord Bot から DM にて通知が届きます。
-4. ライブ配信予定が変更になった場合は新しい配信予定時刻に基づきリマインダー設定が更新されます。
+1. ライブ配信予定の投稿に対して絵文字 ⏰ (alarm_clock) でリアクションを実施します。
+2. ライブ配信予定の 5 分前に Discord Bot から DM にて通知が届きます。
+3. ライブ配信予定が変更になった場合は新しい配信予定時刻に基づきリマインダー設定が更新されます。
 
 #### スラッシュコマンドの利用
 
 - **live コマンド**
 
   - Discord Bot が参加しているチャンネルで `/live` コマンドを実行すると、現在ライブ配信中の情報が表示されます。
+  - 引数としてチャンネル名を指定することで、特定チャンネルの情報を表示します。(DBに登録されたチャンネル名と部分一致します)
 
 - **upcoming コマンド**
 
   - Discord Bot が参加しているチャンネルで `/upcoming` コマンドを実行すると、現在時刻から 15 分以内に開始予定のライブ配信情報が表示されます。
+  - 引数としてチャンネル名を指定することで、特定チャンネルの情報を表示します。(DBに登録されたチャンネル名と部分一致します)
   - `/upcoming 60` のようにオプションとして任意の分数を指定することで、60 分以内に開始予定のライブ配信情報を表示します。
 
 - **reminderlist コマンド**
@@ -432,438 +437,3 @@ node src/slashCommand/delete.js <commandId>
 ## ライセンス
 
 このプロジェクトは [MIT license](LICENSE) の下で公開されています。
-
-## English Version
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [List of Functions](#list-of-functions)
-3. [Prerequisites](#prerequisites)
-4. [Directory structure of the project](#directory-structure-of-the-project)
-5. [Environment Variables](#environment-variables)
-6. [Setup](#setup)
-7. [How to use](#how-to-use)
-8. [Functions for administrators](#functions-for-administrators)
-9. [NOTES](#notes)
-10. [License](#license)
-
-## Overview.
-
-This project uses a Discord bot to notify you of live YouTube feeds and videos. It monitors the RSS feed of a given channel and sends notifications to the Discord channel when a new video is posted or a live stream is launched.
-
-## List of Functions
-
-- **Retrieve the latest video information**: Retrieve the latest video information from YouTube channel RSS feeds on a regular basis.
-- **Database storage**: Stores the retrieved video information in a PostgreSQL database.
-- **New video notification**: When a new video is posted, a notification is sent to the specified Discord channel.
-  - **Multiple channel support**: Notifications can be sent to multiple Discord channels.
-  - **Update frequency setting**: Allows you to set the update frequency for each channel.
-- **Slash command**: Displays information on currently streaming videos or videos scheduled to be streamed using the Discord slash command.
-  - **`/live`command**: Displays information on videos currently being streamed.
-  - **`/upcoming`command**: Displays information on the most recently scheduled videos.
-  - **`/reminderlist`command**: Displays a list of registered reminders.
-- **Reminder notification**: Sends a reminder notification 5 minutes before delivery using an emoji reaction.
-- **Automatic database cleanup**: Automatically delete video data that can no longer be transitioned to the appropriate status.
-- **Database manipulation (for administrators)**: allows administrators to perform database maintenance via Discord DM.
-  - **Send SQL Query**: Administrators can manipulate the database by sending SQL queries.
-  - **Auto-delete**: Execution results are automatically deleted after a set time.
-
-## Prerequisites.
-
-Before running this project, you will need the following
-
-- Node.js
-- npm (included with Node.js)
-- PostgreSQL
-- A valid Discord Bot token
-- YouTube Data API key
-
-## Directory structure of the project
-
-```
-.
-├── .env.example
-├── LICENSE
-├── README.md
-├── index.js
-├── package-lock.json
-├── package.json
-└── src
-    ├── config
-    │   ├── dbConfig.example.js
-    │   └── dbConfig.js
-    ├── database
-    │   ├── executeQuery.js
-    │   ├── getChannelsData.js
-    │   ├── queryParser.js
-    │   ├── reminderModel.js
-    │   ├── updateChannelIcon.js
-    │   └── videoData.js
-    ├── discord
-    │   ├── bot.js
-    │   ├── messages.js
-    │   ├── notification.js
-    │   └── reminderInteractions.js
-    ├── reminders
-    │   └── schedule.js
-    ├── slashCommand
-    │   ├── create.js
-    │   ├── createConfig.json
-    │   ├── delete.js
-    │   ├── show.js
-    │   ├── update.js
-    │   └── updateConfig.json
-    ├── tasks
-    │   ├── cleanUpVideoData.js
-    │   ├── reminderScheduler.js
-    │   └── youtubeFeed.js
-    ├── utils
-    │   ├── convertDuration.js
-    │   ├── formatDate.js
-    │   ├── formatResultsAsTable.js
-    │   └── isUrlAccessible.js
-    └── youtube
-        ├── api.js
-        ├── checkAndUpdate.js
-        └── feed.js
-```
-
-## Environment Variables
-
-This project contains a `.env.example` file, which can be used as a reference to create the `.env` file.
-
-### List of Boundary Variables
-
-| environment variable name  | Description                                                            |
-| -------------------------- | ---------------------------------------------------------------------- |
-| YOUTUBE_API_KEY            | YouTube Data API Key                                                   |
-| DISCORD_BOT_TOKEN          | Discord Bot Token                                                      |
-| CLIENT_ID                  | Discord Client ID                                                      |
-| GUILD_ID                   | Discord Guild(server) ID                                               |
-| DISCORD_LIVE_CHANNEL_NAME  | Name of Discord channel to be notified (for live streaming)            |
-| DISCORD_LIVE_WEBHOOK_URL   | Webhook URL of the Discord channel to be notified (for live streaming) |
-| DISCORD_VIDEO_CHANNEL_NAME | Discord channel name to notify (for videos)                            |
-| DISCORD_VIDEO_WEBHOOK_URL  | Webhook URL of the Discord channel to be notified (for videos)         |
-| ADMIN_USER_ID              | Administrator's Discord user ID                                        |
-| DB_HOST                    | Database host name                                                     |
-| DB_NAME                    | Database Name                                                          |
-| DB_USER                    | Database User Name                                                     |
-| DB_PASSWORD                | Database Password                                                      |
-| DB_PORT                    | Database port number                                                   |
-| REMINDER_SEARCH_INTERVAL   | Reminder search interval (minutes)                                     |
-| REMINDER_RECHECK_INTERVAL  | Reminder re-search interval (minutes)                                  |
-| MESSAGE_DELETE_TIMEOUT     | Interval for automatic DM deletion (seconds)                           |
-
-If you use a service such as Fly.io or Heroku, use `DATABASE_URL` as the connection string.
-
-## Setup
-
-### Issuing YouTube Data API Key
-
-1. Access the [Google Cloud Console](https://console.cloud.google.com/).
-2. Select an existing project or create a new project.
-3. From the left-hand menu, select "APIs & Services" → "Library".
-4. Search for "YouTube Data API v3" and enable it.
-5. From the left-hand menu, select "Credentials" and click on "Create Credentials" → "API Key".
-6. Copy the created API key and set it in the `.env` file as `YOUTUBE_API_KEY`.
-
-### Discord Bot の作成
-
-#### How to get DISCORD_BOT_TOKEN
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications) and click [New Application].
-2. Enter an application name and click "Create".
-3. Select "Bot" from the menu on the left and proceed as follows
-   - Click on "Reset Token.
-   - Click "Yes, do it!" in that order.
-   - Copy the bot's token that appears.
-4. In the Authorization Flow section, enable the following and click "Save Changes".
-   - `SERVER MEMBERS INTENT`
-   - `MESSAGE CONTENT INTENT `
-5. Set the copied token to `DISCORD_BOT_TOKEN` in the `.env` file.
-
-#### How to get CLIENT_ID
-
-1. Select `OAuth2` from the menu on the left and copy the `Client ID`.
-2. Set the copied ID to `CLIENT_ID` in the `.env` file.
-
-### OAuth2 Configuration
-
-1. Go to "OAuth2" and then to "OAuth2 URL Generator".
-2. In the "SCOPES" section, enable the following
-   - `bot`
-   - `applications.commands`
-3. In the BOT PERMISSIONS section, enable the following
-
-- `Send Messages`
-- `Read Message History`
-- `Use Slash Commands`
-
-4. Copy the generated URL, open it in your browser, and add the bot to your server.
-
-#### How to get GUILD_ID
-
-1. Enable `Developer Mode` from "Advanced Settings" in "User Settings" of Discord.
-2. Right click on the target server name in the Discord application and select `Copy Server ID`.
-3. Set the copied ID to `GUILD_ID` in the `.env` file.
-
-### How to get the webhook URL of a Discord channel
-
-1. Right-click on the Discord channel and click Edit Channel.
-2. Go to the "Linked Services" section and click Create Webhook.
-3. Click on the created webhook and click "Copy Webhook URL".
-4. Add the copied URL to your `.env` file.
-
-### How to get an administrator's Discord user ID
-
-1.  Open Discord and right-click on the target user name.
-2.  Click "Copy User ID".
-3.  Set the copied ID to `ADMIN_USER_ID` in the `.env` file
-
-### Database Setup
-
-#### 1. Install and start PostgreSQL.
-
-#### 2. Execute the following commands to create the database and users
-
-```sql
-CREATE DATABASE your_database_name;
-CREATE USER your_database_user WITH PASSWORD 'your_database_password';
-GRANT ALL PRIVILEGES ON DATABASE your_database_name TO your_database_user;
-```
-
-#### 3. Set database connection information in the .env file.
-
-#### 4. Configuration of dbConfig.js
-
-The database connection is configured in the `dbConfig.js` file. Since `dbConfig.example.js` is included as a sample file, modify the configuration to suit your environment and save it as `dbConfig.js`.
-
-### Database Design
-
-This project will use a database with three main tables to manage the application's data. Below is an overview of each table and its schema.
-
-#### 1. `channels` table
-
-Maintains basic channel information and associated Discord notification settings.
-
-| Column name          | Type         | Description                    |
-| -------------------- | ------------ | ------------------------------ |
-| channel_id           | VARCHAR(255) | YouTube Channel ID             |
-| channel_name         | VARCHAR(255) | YouTube Channel Name           |
-| channel_icon_url     | VARCHAR(255) | Channel Icon URL               |
-| discord_channel_name | VARCHAR(255) | Discord channel name to notify |
-
-#### 2. `video_data` table
-
-Manage video information from YouTube and its distribution status.
-
-| Column name          | Type                     | Description                                          |
-| -------------------- | ------------------------ | ---------------------------------------------------- |
-| video_id             | VARCHAR(255)             | Unique identifier of the video                       |
-| title                | VARCHAR(255)             | Title of the video                                   |
-| published            | TIMESTAMP                | Date and time the video was published                |
-| updated              | TIMESTAMP                | Date and time the video information was last updated |
-| channel              | VARCHAR(255)             | YouTube channel name to which the video belongs      |
-| status               | VARCHAR(50)              | Live streaming status of the video                   |
-| scheduled_start_time | TIMESTAMP WITH TIME ZONE | Scheduled start time of streaming                    |
-| actual_start_time    | TIMESTAMP WITH TIME ZONE | Actual start time of distribution                    |
-| actual_end_time      | TIMESTAMP WITH TIME ZONE | Actual end time of distribution                      |
-| duration             | VARCHAR(50)              | Video duration (HH:MM:SS format)                     |
-
-#### 3. `reminder` table
-
-Tracks reminder information and its notification status based on user preferences.
-
-| Column name     | Type                     | Description                            |
-| --------------- | ------------------------ | -------------------------------------- |
-| id              | INTEGER                  | Primary key, auto-increment            |
-| user_id         | BIGINT                   | User ID for which the reminder was set |
-| message_content | TEXT                     | Message content of the reminder        |
-| reminder_time   | TIMESTAMP WITH TIME ZONE | Time at which the reminder was set     |
-| scheduled       | BOOLEAN                  | Schedule registration status           |
-| executed        | BOOLEAN                  | Reminder execution status              |
-| video_id        | VARCHAR(255)             | YouTube video ID                       |
-
-### Creating Database Tables
-
-Execute the following SQL to create database tables.
-
-```sql
-CREATE TABLE channels (
-    channel_id VARCHAR(255) PRIMARY KEY,
-    channel_name VARCHAR(255) NOT NULL,
-    channel_icon_url VARCHAR(255),
-    discord_channel_name VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE video_data (
-    video_id VARCHAR(255) PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    published TIMESTAMP NOT NULL,
-    updated TIMESTAMP NOT NULL,
-    channel VARCHAR(255) NOT NULL,
-    status VARCHAR(50),
-    scheduled_start_time TIMESTAMP WITH TIME ZONE,
-    actual_start_time TIMESTAMP WITH TIME ZONE,
-    actual_end_time TIMESTAMP WITH TIME ZONE,
-    duration VARCHAR(50)
-);
-
-CREATE TABLE reminder (
-    id SERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    message_content TEXT NOT NULL,
-    reminder_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    scheduled BOOLEAN DEFAULT FALSE,
-    executed BOOLEAN DEFAULT FALSE,
-    video_id VARCHAR(255),
-    FOREIGN KEY (video_id) REFERENCES video_data(video_id)
-);
-```
-
-### Registering data in the channels table
-
-1. `channels` Register data in a table. Below is an SQL statement to register as an example.
-
-```sql
-INSERT INTO channels (channel_id, channel_name, discord_channel_name)
-VALUES ('UC_x5XG1OV2P6uZZ5FSM9Ttw', 'Google Developers', 'Streamer update notifications');
-```
-
-Replace channel_id, channel_name, and discord_channel_name with appropriate values if necessary.
-
-### Application Installation
-
-Clone the repository.
-
-```bash
-git clone https://github.com/tatsumin39/stream-notifications-bot.git
-cd stream-notifications-bot
-```
-
-Install the necessary packages.
-
-```bash
-npm install
-```
-
-Launching an Application
-Start the application with the following command
-
-```bash
-node index.js
-```
-
-### Discord slash command registration
-
-To register the slash command, execute the following command
-
-```bash
-node src/slashCommand/create.js src/slashCommand/createConfig.json
-```
-
-### Updating Slash Commands
-
-To update a registered slash command, follow these steps: 1.
-
-1. Check the ID of the registered slash command.
-   node src/slashCommand/showSlashCommands.js
-
-2. Save the definition of the slash command to be updated as a JSON file (updateConfig.json) with the ID of the slash command.
-
-3. Specify the JSON file and execute the following command
-
-```bash
-node src/slashCommand/update.js src/slashCommand/updateConfig.json
-```
-
-### Deleting Slash Commands
-
-To delete a registered slash command, follow these steps
-
-1. Check the ID of the registered slash command.
-   node src/slashCommand/showSlashCommands.js
-
-2. Specify the ID of the slash command you wish to delete and execute the following command
-
-```bash
-node src/slashCommand/delete.js <commandId>
-```
-
-## How to use
-
-#### Subscribe to Reminders
-
-1. register an emoji :remind: for reminders in advance.
-2. react to the post to be live-streamed by using :remind: emoji.
-3. You will receive a DM notification from the Discord Bot 5 minutes before the scheduled live broadcast.
-4. If the live streaming schedule is changed, the reminder setting will be updated based on the new scheduled streaming time.
-
-#### Using the slash command
-
-- **live command**
-
-  - Running the `/live` command on a channel in which a Discord Bot is participating will display information about the current live feed.
-
-- **upcoming command**
-
-  - Running the `/upcoming` command on a channel where a Discord Bot is participating will show information on live broadcasts scheduled to start within 15 minutes of the current time.
-  - By specifying any number of minutes as an option, such as `/upcoming 60`, the live streaming information scheduled to start within 60 minutes will be displayed.
-
-- **reminderlist command**
-  - Running the `/reminderlist` command on a channel in which the Discord Bot is participating will show you the valid reminders you have registered.
-
-## Functions for administrators
-
-### Automatic Database Cleanup
-
-Proper status transitions may not occur when a video scheduled to be live-streamed is deleted or made private, or when a video becomes limited public during a live-streaming session. This situation may affect the results of the `/live` or `/upcoming` slash command.
-
-For this reason, as part of its regular maintenance task, `cleanUpVideoData.js` performs the following operation every 5 minutes. This will ensure that the `video_data` table retains only the most recent entries, improving database performance and accuracy.
-
-- Delete videos with `upcoming` status that have a `scheduled_start_time` of 13 hours or more.
-- Delete videos with `live` status that have an `actual_start_time` of 13 hours or more.
-
-### Maintenance by DM with Discord Bot
-
-Users who set the administrator's user ID as `ADMIN_USER_ID` in the environment variable can perform database maintenance via DM with the Discord Bot. An example is shown below.
-
-#### Examples of Use
-
-- **Video Data Search**
-
-  ```sql
-  SELECT * FROM "video_data" WHERE "status" = 'upcoming' ORDER BY "scheduled_start_time" ASC LIMIT 5;
-  ```
-
-- **Update channel information**
-
-  ```sql
-  UPDATE "channels" SET channel_name = '<Channel Name>' WHERE channel_id = '<Channel Name>';
-  ```
-
-- **Deleting Video Data**
-  ```sql
-  DELETE FROM "video_data" WHERE "video_id" = '<Video ID>';
-  ```
-
-The execution result is automatically deleted after the number of seconds set in the MESSAGE_DELETE_TIMEOUT environment variable. However, if Discord Bot is restarted, the execution result may remain in DM without automatic deletion.
-
-## NOTES.
-
-### Real-Time Notifications
-
-This system does not guarantee real-time notifications, which may be delayed depending on when YouTube updates are reflected in the feed.
-
-### Addition of Target Channels
-
-When adding a channel, the data of the 5 most recent entries for one channel is retrieved. Therefore, adding a large number of channels at once may result in a large number of notifications. As a result, it may violate Discord's message limit. With this in mind, please be careful when adding channel information.
-
-### Language Note
-
-This project uses Japanese for notification messages to Discord, comments, and console.log statements for debugging. The Japanese used is basic, so please replace it with your preferred language if necessary.
-
-## License
-
-This project is released under [MIT license](LICENSE).
